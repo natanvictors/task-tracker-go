@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -48,10 +49,10 @@ func commandExit(cmd command) error {
 	return nil
 }
 
-func commandAdd(cmd command) error {
-	file, err := os.OpenFile("tasks.json", os.O_CREATE|os.O_RDWR, 0644)
+func readFile(path string) ([]task, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
@@ -59,19 +60,38 @@ func commandAdd(cmd command) error {
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	if len(data) != 0 {
 		err = json.Unmarshal(data, &fileTasks)
 		if err != nil {
-			return err
+			return nil, err
 		}
+	}
+
+	return fileTasks, nil
+}
+
+func saveFile(path string, fileTasks []task) error {
+	data, err := json.MarshalIndent(fileTasks, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+func commandAdd(cmd command) error {
+
+	fileTasks, err := readFile("tasks.json")
+	if err != nil {
+		return err
 	}
 
 	newTask := task{
 		Id:          len(fileTasks) + 1,
-		Description: cmd.arguments[0],
+		Description: strings.Trim(strings.Join(cmd.arguments, " "), "\""),
 		Status:      "todo",
 		CreatedAt:   time.Now().UTC(),
 		UpdatedAt:   time.Now().UTC(),
@@ -79,12 +99,26 @@ func commandAdd(cmd command) error {
 
 	fileTasks = append(fileTasks, newTask)
 
-	returnData, err := json.MarshalIndent(fileTasks, "", "  ")
+	return saveFile("tasks.json", fileTasks)
+}
+
+func commandUpdate(cmd command) error {
+
+	taskID, err := strconv.Atoi(cmd.arguments[0])
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile("tasks.json", returnData, 0644)
+	newDesc := strings.Trim(strings.Join(cmd.arguments[1:], " "), "\"")
+
+	fileTasks, err := readFile("tasks.json")
+	if err != nil {
+		return err
+	}
+
+	fileTasks[taskID-1].Description = newDesc
+
+	return saveFile("tasks.json", fileTasks)
 }
 
 func main() {
@@ -104,6 +138,7 @@ func main() {
 
 		cmds.register("exit", commandExit)
 		cmds.register("add", commandAdd)
+		cmds.register("update", commandUpdate)
 
 		err := cmds.run(command{
 			command:   input[0],
