@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -121,6 +122,26 @@ func commandUpdate(cmd command) error {
 	return saveFile("tasks.json", fileTasks)
 }
 
+func commandDelete(cmd command) error {
+	taskID, err := strconv.Atoi(cmd.arguments[0])
+	if err != nil {
+		return err
+	}
+
+	fileTasks, err := readFile("tasks.json")
+	if err != nil {
+		return err
+	}
+
+	index := slices.IndexFunc(fileTasks, func(iTask task) bool {
+		return iTask.Id == taskID
+	})
+
+	fileTasks = append(fileTasks[:index], fileTasks[index+1:]...)
+
+	return saveFile("tasks.json", fileTasks)
+}
+
 func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -139,6 +160,7 @@ func main() {
 		cmds.register("exit", commandExit)
 		cmds.register("add", commandAdd)
 		cmds.register("update", commandUpdate)
+		cmds.register("delete", commandDelete)
 
 		err := cmds.run(command{
 			command:   input[0],
